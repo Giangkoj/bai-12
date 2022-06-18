@@ -2,36 +2,65 @@ package main
 
 import (
 	"fmt"
-	"sync"
 )
 
 func main() {
+	randomNumbers := []int{}
+	for i := 1; i <= 1000; i++ {
+		randomNumbers = append(randomNumbers, i)
 
-	var wg = sync.WaitGroup{}
-	ch1 := make(chan int, 50)
-	ch2 := make(chan int, 50)
+	}
+	// generate pipeline
+	inputChan := generatePipeline(randomNumbers)
 
-	wg.Add(2)
+	// Fan-out
+	c1 := fanOut(inputChan)
+	c2 := fanOut(inputChan)
+	c3 := fanOut(inputChan)
+	c4 := fanOut(inputChan)
+
+	// Fan-in
+	c := fanIn(c1, c2, c3, c4)
+
+	sum := 0
+	for i := 0; i < len(randomNumbers); i++ {
+		sum += <-c
+	}
+
+	fmt.Printf("tong sum la: %d", sum)
+
+}
+
+func generatePipeline(numbers []int) <-chan int {
+	out := make(chan int)
 	go func() {
-		for {
-			select {
-			case i := <-ch1:
-				fmt.Println("channel 1: %v\n", i)
-			case j := <-ch2:
-				fmt.Println("channel 2: %v\n", j)
-			default:
-				break
+		for _, n := range numbers {
+			out <- n
+		}
+		close(out)
+
+	}()
+	return out
+}
+func fanOut(in <-chan int) <-chan int {
+	out := make(chan int)
+	go func() {
+		for n := range in {
+			out <- n * n
+		}
+		close(out)
+	}()
+	return out
+}
+func fanIn(inputChannel ...<-chan int) <-chan int {
+	in := make(chan int)
+	go func() {
+		for _, c := range inputChannel {
+			for n := range c {
+				in <- n
 			}
 		}
-		wg.Done()
-	}()
-	go func() {
-		ch1 <- 42
-		close(ch1)
-		ch2 <- 27
-		close(ch2)
-		wg.Done()
 
 	}()
-
+	return in
 }
